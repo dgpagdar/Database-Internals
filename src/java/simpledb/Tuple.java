@@ -20,7 +20,7 @@ public class Tuple implements Serializable {
     /**
      * Create a new tuple with the specified schema (type).
      *
-     * @param td the schema of  this tuple. It must be a valid TupleDesc
+     * @param td the schema of this tuple. It must be a valid TupleDesc
      *           instance with at least one field.
      */
     public Tuple(TupleDesc td) {
