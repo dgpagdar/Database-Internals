@@ -109,4 +109,30 @@ public class Tuple implements Serializable {
     public void resetTupleDesc(TupleDesc td) {
         this.tupleDescs = td;
     }
+
+    /**
+     * Merges two tuples.
+     *
+     * @param t1 tuple one
+     * @param t2 tuple two
+     * @return A new merged tuple who have tuples of t1 and t2
+     */
+    public static Tuple merge(Tuple t1, Tuple t2) {
+        TupleDesc mergedtupleDesc = TupleDesc.merge(t1.getTupleDesc(), t2.getTupleDesc());
+        Tuple mergedtuple = new Tuple(mergedtupleDesc);
+
+        int index = 0;
+
+        for (Field field1 : t1.fields) {
+            mergedtuple.setField(index, field1);
+            index++;
+        }
+
+        for (Field field2 : t2.fields) {
+            mergedtuple.setField(index, field2);
+            index++;
+        }
+
+        return mergedtuple;
+    }
 }
