@@ -1,0 +1,13 @@
+Feedback for: dgpagdar
+--------------------------------------------------------------
+Total Score (%): 98
+Unit Test Score (out of 32): 32
+System Test Score (out of 4): 4
+Code Score (out of 10): 10
+Writeup Score (out of 10): 8
+--------------------------------------------------------------
+Code Feedback (10/10): 
+Your code was very simple and clean. However, for the future as labs become more complicated consider placing comments within long code blocks and custom methods/classes (in this lab, your DBFileIterator).          
+                                                                                                                                                       
+Writeup Feedback (8/10):
+Nice work on your detailed description of how each component interacted with each other. You lost a point for forgetting about Catalog, RecordId, and HeapPage ID in your write-up (a classes you implemented), its purpose and how it interacted with the other lab components. You lost another point as while you did a good job describing how each component interacted with each other, you could have talked more in depth for each component about your own specific implementation features and thought process while implementing them. While you did not get marked down for this next point, for design decisions, you could have also talked about some other points such as your custom table class in Catalog. In the future, it would be nice for you to explain why your proposed unit test addition would be helpful.
