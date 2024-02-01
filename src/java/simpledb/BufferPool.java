@@ -153,8 +153,8 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        DbFile dbFile = Database.getCatalog().getDatabaseFile(tableId);
-        ArrayList<Page> modifiedPages = dbFile.insertTuple(tid, t);
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableId);
+        ArrayList<Page> modifiedPages = heapFile.insertTuple(tid, t);
         for (Page page : modifiedPages) {
             page.markDirty(true, tid);
             cachePage.put(page.getId(), page);
@@ -177,9 +177,9 @@ public class BufferPool {
     public void deleteTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
         int tableId = t.getRecordId().getPageId().getTableId();
-        DbFile dbFile = Database.getCatalog().getDatabaseFile(tableId);
-        ArrayList<Page> affectedPages = dbFile.deleteTuple(tid, t);
-        for (Page page : affectedPages) {
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableId);
+        ArrayList<Page> modifiedPages = heapFile.deleteTuple(tid, t);
+        for (Page page : modifiedPages) {
             page.markDirty(true, tid);
             cachePage.put(page.getId(), page);
         }
