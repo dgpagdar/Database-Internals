@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -79,7 +80,7 @@ public class BufferPool {
         }
 
         if (cachePage.size() >= maxPages) {
-            throw new DbException("Max Page Limit is Reached");
+            evictPage();
         }
 
         DbFile file = Database.getCatalog().getDatabaseFile(pid.getTableId());
@@ -152,8 +153,12 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for lab1
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableId);
+        ArrayList<Page> modifiedPages = heapFile.insertTuple(tid, t);
+        for (Page page : modifiedPages) {
+            page.markDirty(true, tid);
+            cachePage.put(page.getId(), page);
+        }
     }
 
     /**
@@ -171,8 +176,13 @@ public class BufferPool {
      */
     public void deleteTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for lab1
+        int tableId = t.getRecordId().getPageId().getTableId();
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableId);
+        ArrayList<Page> modifiedPages = heapFile.deleteTuple(tid, t);
+        for (Page page : modifiedPages) {
+            page.markDirty(true, tid);
+            cachePage.put(page.getId(), page);
+        }
     }
 
     /**
@@ -181,9 +191,9 @@ public class BufferPool {
      * break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        // some code goes here
-        // not necessary for lab1
-
+        for (PageId pid : this.cachePage.keySet()) {
+            this.flushPage(pid);
+        }
     }
 
     /**
@@ -196,8 +206,7 @@ public class BufferPool {
      * are removed from the cache so they can be reused safely
      */
     public synchronized void discardPage(PageId pid) {
-        // some code goes here
-        // not necessary for lab1
+        this.cachePage.remove(pid);
     }
 
     /**
@@ -206,8 +215,16 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
-        // some code goes here
-        // not necessary for lab1
+        Page page = cachePage.get(pid);
+        if (page == null) {
+            throw new IOException();
+        }
+        if (page.isDirty() != null) {
+            HeapFile f = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
+            f.writePage(page);
+            page.markDirty(false, null);
+        }
+
     }
 
     /**
@@ -223,8 +240,14 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        // some code goes here
-        // not necessary for lab1
+        Object[] pageIDs = cachePage.keySet().toArray();
+        PageId evictPageId = (PageId) pageIDs[(int) (Math.random() * pageIDs.length)];
+        try {
+            flushPage(evictPageId);
+            cachePage.remove(evictPageId);
+        } catch (IOException e) {
+            throw new DbException("Error flushing page");
+        }
     }
 
 }

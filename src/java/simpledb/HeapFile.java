@@ -78,8 +78,11 @@ public class HeapFile implements DbFile {
 
     // see DbFile.java for javadocs
     public void writePage(Page page) throws IOException {
-        // some code goes here
-        // not necessary for lab1
+        RandomAccessFile randomAccessFile = new RandomAccessFile(this.file, "rw");
+        int offset = page.getId().getPageNumber() * BufferPool.getPageSize();
+        randomAccessFile.seek(offset);
+        randomAccessFile.write(page.getPageData());
+        randomAccessFile.close();
     }
 
     /**
@@ -92,29 +95,48 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        return null;
-        // not necessary for lab1
+        ArrayList<Page> modifiedPages = new ArrayList<>();
+
+        for (int i = 0; i < numPages(); i++) {
+            HeapPageId pid = new HeapPageId(getId(), i);
+            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
+
+            if (page.getNumEmptySlots() > 0) {
+                page.insertTuple(t);
+                modifiedPages.add(page);
+                return modifiedPages;
+            }
+        }
+        HeapPageId newPageId = new HeapPageId(getId(), numPages());
+        HeapPage newPage = new HeapPage(newPageId, HeapPage.createEmptyPageData());
+        newPage.insertTuple(t);
+        writePage(newPage);
+        modifiedPages.add(newPage);
+
+        return modifiedPages;
     }
 
     // see DbFile.java for javadocs
     public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
-        // some code goes here
-        return null;
-        // not necessary for lab1
+        ArrayList<Page> modifiedPages = new ArrayList<>();
+        HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, t.getRecordId().getPageId(), Permissions.READ_WRITE);
+        heapPage.deleteTuple(t);
+        modifiedPages.add(heapPage);
+        return modifiedPages;
     }
 
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         return new DbFileIterator() {
-            private int currPageNumber = 0;
+            int currPageNumber;
             Iterator<Tuple> tupleIterator;
 
             @Override
             public void open() throws DbException, TransactionAbortedException {
+                currPageNumber = 0;
                 HeapPageId heapPageId = new HeapPageId(getId(), currPageNumber);
-                HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_ONLY);
+                HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
                 tupleIterator = heapPage.iterator();
             }
 
@@ -126,12 +148,14 @@ public class HeapFile implements DbFile {
                 if (tupleIterator.hasNext()) {
                     return true;
                 }
-                if (currPageNumber < numPages() - 1) {
+                while (currPageNumber < numPages() - 1) {
                     currPageNumber++;
                     HeapPageId heapPageId = new HeapPageId(getId(), currPageNumber);
-                    HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_ONLY);
+                    HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
                     tupleIterator = heapPage.iterator();
-                    return tupleIterator.hasNext();
+                    if (tupleIterator.hasNext()) {
+                        return true;
+                    }
                 }
                 return false;
             }
@@ -146,7 +170,6 @@ public class HeapFile implements DbFile {
 
             @Override
             public void rewind() throws DbException, TransactionAbortedException {
-                close();
                 open();
             }
 
