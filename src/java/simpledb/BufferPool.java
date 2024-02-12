@@ -33,6 +33,7 @@ public class BufferPool {
 
     private int maxPages;
     private ConcurrentHashMap<PageId, Page> cachePage;
+    LockManager lockManager;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -42,6 +43,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         this.maxPages = numPages;
         this.cachePage = new ConcurrentHashMap<>();
+        lockManager = new LockManager();
     }
 
     public static int getPageSize() {
@@ -56,6 +58,10 @@ public class BufferPool {
     // THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
     public static void resetPageSize() {
         BufferPool.pageSize = DEFAULT_PAGE_SIZE;
+    }
+
+    public LockManager getLockManager() {
+        return this.lockManager;
     }
 
     /**
@@ -75,6 +81,22 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
+        boolean gotLock = false;
+        while (!gotLock) {
+            synchronized (this) {
+                gotLock = (perm == Permissions.READ_ONLY) ?
+                        lockManager.getShardedLock(pid, tid) :
+                        lockManager.getExclusiveLock(pid, tid);
+            }
+            if (!gotLock) {
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
         if (cachePage.containsKey(pid)) {
             return cachePage.get(pid);
         }
@@ -87,7 +109,6 @@ public class BufferPool {
         Page page = file.readPage(pid);
         cachePage.put(pid, page);
         return page;
-
     }
 
     /**
@@ -100,8 +121,8 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public void releasePage(TransactionId tid, PageId pid) {
-        // some code goes here
-        // not necessary for lab1|lab2
+        this.lockManager.releaseExclusiveLock(pid, tid);
+        this.lockManager.releaseSharededLock(pid, tid);
     }
 
     /**
@@ -118,9 +139,7 @@ public class BufferPool {
      * Return true if the specified transaction has a lock on the specified page
      */
     public boolean holdsLock(TransactionId tid, PageId p) {
-        // some code goes here
-        // not necessary for lab1|lab2
-        return false;
+        return this.lockManager.hasExclusiveLock(p, tid) || this.lockManager.hasShardLock(p, tid);
     }
 
     /**

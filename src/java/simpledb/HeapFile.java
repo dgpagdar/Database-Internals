@@ -99,7 +99,7 @@ public class HeapFile implements DbFile {
 
         for (int i = 0; i < numPages(); i++) {
             HeapPageId pid = new HeapPageId(getId(), i);
-            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
+            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_ONLY);
 
             if (page.getNumEmptySlots() > 0) {
                 page.insertTuple(t);
@@ -136,7 +136,7 @@ public class HeapFile implements DbFile {
             public void open() throws DbException, TransactionAbortedException {
                 currPageNumber = 0;
                 HeapPageId heapPageId = new HeapPageId(getId(), currPageNumber);
-                HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
+                HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_ONLY);
                 tupleIterator = heapPage.iterator();
             }
 
@@ -151,7 +151,7 @@ public class HeapFile implements DbFile {
                 while (currPageNumber < numPages() - 1) {
                     currPageNumber++;
                     HeapPageId heapPageId = new HeapPageId(getId(), currPageNumber);
-                    HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
+                    HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_ONLY);
                     tupleIterator = heapPage.iterator();
                     if (tupleIterator.hasNext()) {
                         return true;
