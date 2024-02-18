@@ -86,7 +86,7 @@ public class BufferPool {
         while (!gotLock) {
             synchronized (this) {
                 gotLock = (perm == Permissions.READ_ONLY) ?
-                        lockManager.getReadLock(pid, tid) :
+                        lockManager.getShardedLock(pid, tid) :
                         lockManager.getExclusiveLock(pid, tid);
             }
             if (!gotLock) {
@@ -123,7 +123,7 @@ public class BufferPool {
      */
     public void releasePage(TransactionId tid, PageId pid) {
         this.lockManager.releaseExclusiveLock(pid, tid);
-        this.lockManager.releaseReadLock(pid, tid);
+        this.lockManager.releaseShardLock(pid, tid);
     }
 
     /**
@@ -132,7 +132,6 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      */
     public void transactionComplete(TransactionId tid) throws IOException {
-        // some code goes here
         transactionComplete(tid, true);
     }
 
@@ -140,7 +139,7 @@ public class BufferPool {
      * Return true if the specified transaction has a lock on the specified page
      */
     public boolean holdsLock(TransactionId tid, PageId p) {
-        return this.lockManager.hasExclusiveLock(p, tid) || this.lockManager.hasReadLock(p, tid);
+        return this.lockManager.hasExclusiveLock(p, tid) || this.lockManager.hasShardLock(p, tid);
     }
 
     /**
@@ -151,33 +150,27 @@ public class BufferPool {
      * @param commit a flag indicating whether we should commit or abort
      */
     public synchronized void transactionComplete(TransactionId tid, boolean commit) throws IOException {
-        // Iterate over each entry in the pageMap
         for (Map.Entry<PageId, Page> entry : cachePage.entrySet()) {
             PageId pageId = entry.getKey();
             Page page = entry.getValue();
 
-            // Check if the page is dirty and modified by the current transaction
             if (page.isDirty() != null && page.isDirty().equals(tid)) {
                 if (commit) {
-                    // Commit: Flush the dirty page to disk
                     flushPage(pageId);
                 } else {
-                    // Abort: Revert changes by reloading the page from disk
-                    Page freshPage = Database.getCatalog().getDatabaseFile(pageId.getTableId()).readPage(pageId);
-                    freshPage.markDirty(false, null);
-                    cachePage.put(pageId, freshPage);
+                    Page newPage = Database.getCatalog().getDatabaseFile(pageId.getTableId()).readPage(pageId);
+                    newPage.markDirty(false, null);
+                    cachePage.put(pageId, newPage);
                 }
             }
         }
 
-        // Release all locks held by the transaction
         cachePage.keySet().forEach(pageId -> {
             lockManager.releaseExclusiveLock(pageId, tid);
-            lockManager.releaseReadLock(pageId, tid);
+            lockManager.releaseShardLock(pageId, tid);
         });
 
-        // Remove transaction from dependency graph or similar cleanup action
-        lockManager.removeFromDependency(tid);
+        lockManager.removeFromGraph(tid);
     }
 
 
