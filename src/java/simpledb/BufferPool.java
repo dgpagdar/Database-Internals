@@ -3,6 +3,7 @@ package simpledb;
 import java.io.*;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -85,7 +86,7 @@ public class BufferPool {
         while (!gotLock) {
             synchronized (this) {
                 gotLock = (perm == Permissions.READ_ONLY) ?
-                        lockManager.getShardedLock(pid, tid) :
+                        lockManager.getReadLock(pid, tid) :
                         lockManager.getExclusiveLock(pid, tid);
             }
             if (!gotLock) {
@@ -122,7 +123,7 @@ public class BufferPool {
      */
     public void releasePage(TransactionId tid, PageId pid) {
         this.lockManager.releaseExclusiveLock(pid, tid);
-        this.lockManager.releaseSharededLock(pid, tid);
+        this.lockManager.releaseReadLock(pid, tid);
     }
 
     /**
@@ -132,14 +133,14 @@ public class BufferPool {
      */
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
-        // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /**
      * Return true if the specified transaction has a lock on the specified page
      */
     public boolean holdsLock(TransactionId tid, PageId p) {
-        return this.lockManager.hasExclusiveLock(p, tid) || this.lockManager.hasShardLock(p, tid);
+        return this.lockManager.hasExclusiveLock(p, tid) || this.lockManager.hasReadLock(p, tid);
     }
 
     /**
@@ -149,11 +150,36 @@ public class BufferPool {
      * @param tid    the ID of the transaction requesting the unlock
      * @param commit a flag indicating whether we should commit or abort
      */
-    public void transactionComplete(TransactionId tid, boolean commit)
-            throws IOException {
-        // some code goes here
-        // not necessary for lab1|lab2
+    public synchronized void transactionComplete(TransactionId tid, boolean commit) throws IOException {
+        // Iterate over each entry in the pageMap
+        for (Map.Entry<PageId, Page> entry : cachePage.entrySet()) {
+            PageId pageId = entry.getKey();
+            Page page = entry.getValue();
+
+            // Check if the page is dirty and modified by the current transaction
+            if (page.isDirty() != null && page.isDirty().equals(tid)) {
+                if (commit) {
+                    // Commit: Flush the dirty page to disk
+                    flushPage(pageId);
+                } else {
+                    // Abort: Revert changes by reloading the page from disk
+                    Page freshPage = Database.getCatalog().getDatabaseFile(pageId.getTableId()).readPage(pageId);
+                    freshPage.markDirty(false, null);
+                    cachePage.put(pageId, freshPage);
+                }
+            }
+        }
+
+        // Release all locks held by the transaction
+        cachePage.keySet().forEach(pageId -> {
+            lockManager.releaseExclusiveLock(pageId, tid);
+            lockManager.releaseReadLock(pageId, tid);
+        });
+
+        // Remove transaction from dependency graph or similar cleanup action
+        lockManager.removeFromDependency(tid);
     }
+
 
     /**
      * Add a tuple to the specified table on behalf of transaction tid.  Will
@@ -259,14 +285,28 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        Object[] pageIDs = cachePage.keySet().toArray();
-        PageId evictPageId = (PageId) pageIDs[(int) (Math.random() * pageIDs.length)];
-        try {
-            flushPage(evictPageId);
-            cachePage.remove(evictPageId);
-        } catch (IOException e) {
-            throw new DbException("Error flushing page");
+        if (cachePage.keySet().size() == maxPages) {
+            PageId pageIdEvict = null;
+            for (Map.Entry<PageId, Page> entry : cachePage.entrySet()) {
+                if (entry.getValue().isDirty() == null) {
+                    pageIdEvict = entry.getKey();
+                    break;
+                }
+            }
+
+            if (pageIdEvict == null) {
+                throw new DbException("No pages to evict");
+            }
+
+            try {
+                flushPage(pageIdEvict);
+            } catch (IOException e) {
+                throw new DbException("Cannot flush the page to disk during eviction");
+            }
+
+            cachePage.remove(pageIdEvict);
         }
     }
+
 
 }
