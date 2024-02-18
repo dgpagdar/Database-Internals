@@ -1,0 +1,11 @@
+Feedback for: dgpagdar
+--------------------------------------------------------------
+Total Score (%): 100
+Unit Test Score (out of 32): 38
+System Test Score (out of 4): 24
+Code Score (out of 10): 10
+Writeup Score (out of 10): 10
+--------------------------------------------------------------
+Code: (-0) Please comment a bit more for non-trivial code blocks. 
+
+Writeup: (-0) Great breakdown of the functionality of every part of your code. 
