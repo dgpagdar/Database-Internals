@@ -154,6 +154,7 @@ public class BufferPool {
             PageId pageId = entry.getKey();
             Page page = entry.getValue();
 
+            // Check if the page has been modified by the current transaction.
             if (page.isDirty() != null && page.isDirty().equals(tid)) {
                 if (commit) {
                     flushPage(pageId);
@@ -165,6 +166,7 @@ public class BufferPool {
             }
         }
 
+        // Release all locks held by the transaction.
         cachePage.keySet().forEach(pageId -> {
             lockManager.releaseExclusiveLock(pageId, tid);
             lockManager.releaseShardLock(pageId, tid);
@@ -278,15 +280,18 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
+        // Check if the buffer pool has reached its maximum capacity.
         if (cachePage.keySet().size() == maxPages) {
             PageId pageIdEvict = null;
             for (Map.Entry<PageId, Page> entry : cachePage.entrySet()) {
+                // If a page is not dirty, select it for eviction.
                 if (entry.getValue().isDirty() == null) {
                     pageIdEvict = entry.getKey();
                     break;
                 }
             }
 
+            // If no non-dirty page is found, throw an exception.
             if (pageIdEvict == null) {
                 throw new DbException("No pages to evict");
             }

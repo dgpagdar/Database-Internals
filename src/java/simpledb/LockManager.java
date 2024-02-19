@@ -69,12 +69,13 @@ public class LockManager {
      * @throws TransactionAbortedException If lock leads to a deadlock.
      */
     public synchronized boolean getExclusiveLock(PageId pageId, TransactionId transactionId) throws TransactionAbortedException {
+        // Check if the exclusive lock for the page is already held by a different transaction.
         if (exclusiveLocks.containsKey(pageId) && !exclusiveLocks.get(pageId).equals(transactionId)) {
             if (!addToGraph(exclusiveLocks.get(pageId), transactionId))
                 throw new TransactionAbortedException();
             return false;
         }
-
+        // Check if there are shared read locks on the page.
         if (shardLocks.containsKey(pageId) && !shardLocks.get(pageId).isEmpty()) {
             if (shardLocks.get(pageId).size() == 1 && shardLocks.get(pageId).contains(transactionId)) {
                 if (detectDeadLock(transactionId, pageId)) throw new TransactionAbortedException();
@@ -88,6 +89,7 @@ public class LockManager {
             return false;
         }
 
+        // If no locks are present, check for deadlocks before granting exclusive lock.
         if (detectDeadLock(transactionId, pageId)) throw new TransactionAbortedException();
         exclusiveLocks.put(pageId, transactionId);
         return true;
