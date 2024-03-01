@@ -46,6 +46,28 @@ public class LockManager {
     }
 
     /**
+     * Release locks held by the transaction.
+     *
+     * @param tid Id of the transaction whose locks are to be freed.
+     */
+    public synchronized void freeTransactionLocks(TransactionId tid) {
+        Set<PageId> toRelease = new HashSet<PageId>();
+        for (PageId pageId : exclusiveLocks.keySet()) {
+            if (exclusiveLocks.get(pageId).equals(tid)) {
+                toRelease.add(pageId);
+            }
+        }
+        for (PageId pageId : toRelease) {
+            exclusiveLocks.remove(pageId);
+        }
+        for (PageId pageId : shardLocks.keySet()) {
+            Set<TransactionId> storeValues = shardLocks.get(pageId);
+            storeValues.remove(tid);
+            shardLocks.put(pageId, storeValues);
+        }
+    }
+
+    /**
      * Release the shard lock acquired by the transaction on the page
      *
      * @param pageId        Id of the page in which the lock will be released.
