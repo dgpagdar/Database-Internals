@@ -151,28 +151,26 @@ public class BufferPool {
      */
     public synchronized void transactionComplete(TransactionId tid, boolean commit) throws IOException {
         for (Map.Entry<PageId, Page> entry : cachePage.entrySet()) {
-            PageId pageId = entry.getKey();
             Page page = entry.getValue();
+            PageId pageId = entry.getKey();
 
-            // Check if the page has been modified by the current transaction.
-            if (page.isDirty() != null && page.isDirty().equals(tid)) {
-                if (commit) {
-                    flushPage(pageId);
-                } else {
-                    Page newPage = Database.getCatalog().getDatabaseFile(pageId.getTableId()).readPage(pageId);
-                    newPage.markDirty(false, null);
-                    cachePage.put(pageId, newPage);
+            if (commit) {
+                if (holdsLock(tid, pageId)) {
+                    Database.getLogFile().logWrite(tid, page.getBeforeImage(), page);
+                    Database.getLogFile().force();
+                    page.setBeforeImage();
+                }
+            } else {
+                if (page.isDirty() != null && page.isDirty().equals(tid)) {
+                    Page returned = Database.getCatalog().getDatabaseFile(pageId.getTableId()).readPage(pageId);
+                    returned.markDirty(false, null);
+                    cachePage.put(pageId, returned);
                 }
             }
         }
 
-        // Release all locks held by the transaction.
-        cachePage.keySet().forEach(pageId -> {
-            lockManager.releaseExclusiveLock(pageId, tid);
-            lockManager.releaseShardLock(pageId, tid);
-        });
-
-        lockManager.removeFromGraph(tid);
+        this.lockManager.freeTransactionLocks(tid);
+        this.lockManager.removeFromGraph(tid);
     }
 
 
@@ -261,10 +259,14 @@ public class BufferPool {
         }
         if (page.isDirty() != null) {
             HeapFile f = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
+            TransactionId dirtier = page.isDirty();
+            if (dirtier != null) {
+                Database.getLogFile().logWrite(dirtier, page.getBeforeImage(), page);
+                Database.getLogFile().force();
+            }
             f.writePage(page);
             page.markDirty(false, null);
         }
-
     }
 
     /**
@@ -272,31 +274,15 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        // Check if the buffer pool has reached its maximum capacity.
-        if (cachePage.keySet().size() == maxPages) {
-            PageId pageIdEvict = null;
-            for (Map.Entry<PageId, Page> entry : cachePage.entrySet()) {
-                // If a page is not dirty, select it for eviction.
-                if (entry.getValue().isDirty() == null) {
-                    pageIdEvict = entry.getKey();
-                    break;
-                }
-            }
-
-            // If no non-dirty page is found, throw an exception.
-            if (pageIdEvict == null) {
-                throw new DbException("No pages to evict");
-            }
-
+        if (cachePage.size() == maxPages) {
+            PageId pId = new ArrayList<>(cachePage.keySet())
+                    .get((int) (Math.random() * cachePage.size()));
             try {
-                flushPage(pageIdEvict);
+                flushPage(pId);
             } catch (IOException e) {
                 throw new DbException("Cannot flush the page to disk during eviction");
             }
-
-            cachePage.remove(pageIdEvict);
+            cachePage.remove(pId);
         }
     }
-
-
 }
