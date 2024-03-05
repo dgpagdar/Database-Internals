@@ -1,0 +1,13 @@
+Feedback for: dgpagdar
+--------------------------------------------------------------
+Total Score (%): 100
+Unit Test Score (out of 32): 15
+System Test Score (out of 4): 6
+Code Score (out of 10): 10
+Writeup Score (out of 10): 10
+--------------------------------------------------------------
+Code Feedback (10/10): 
+Great Job. Thank you for writing very clean code that is thoroughly commented for LockManager.
+
+Writeup (10/10):
+Great Write Up!
